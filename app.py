@@ -3,7 +3,10 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings    
 from langchain_community.vectorstores import FAISS
+from langchain_community.llms import HuggingFaceEndpoint
+from  langchain.chains import RetrievalQA 
 
+os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
 
 # Chargement et chunking du PDF
 def process_pdf(pdf_path):
@@ -38,21 +41,45 @@ def create_vector_db(chunks):
     print("Base de données vectorielle créée et sauvegardée localement.")
     return db
 
+def load_rag_chain(): 
+    
+    embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    db = FAISS.load_local("faiss_index", embedding, allow_dangerous_deserialization=True)
+
+    repo_id = "mistral/mistral-7B-instruct-v0.3"
+
+    llm = HuggingFaceEndpoint(
+        repo_id=repo_id,
+        temperature=0.1,
+        max_length=512,
+    )
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever= db.as_retriever(search_kwargs={"k": 3}),
+        return_source_documents=True,
+    )
+
+    return qa_chain
+
 if __name__ == "__main__":
 
-    mon_fichier= "data/AI.pdf"
+    if os.path.exists("faiss_index"):
+        chain = load_rag_chain()
 
-    chunks_result = process_pdf(mon_fichier)
+        question = "Quels sont les points clés de ce document ?"
+        print(f"Question : {question}")
+        print("Génération de la réponse...")
 
-    if chunks_result:
-        create_vector_db(chunks_result)
-        print("\n--- Test de recherche rapide ---")
-        embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-        new_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+        resultat = chain.invoke({"query": question})
 
-        query = "Quel est le theme de ce document?"
-        docs = new_db.similarity_search(query, k=2)
+        print("Réponse générée :")
+        print(resultat['result'])
 
-        print(f"Questions: {query}")
-        print(f"Réponses trouvées:{docs[0].page_content} ")
-        
+        print("\n Portions du pdf utilisées :")
+        for doc in resultat['source_documents']:
+            print(f"- Page {doc.metadata.get('page', '?')}: {doc.page_content[:100]}...")
+
+else:
+    print("Erreur : Lance d'abord la création de la base")
