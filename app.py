@@ -1,12 +1,15 @@
 import os 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings    
+from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint   
 from langchain_community.vectorstores import FAISS
-from langchain_community.llms import HuggingFaceEndpoint
-from  langchain.chains import RetrievalQA 
+from langchain_classic.chains import RetrievalQA
+ 
+from dotenv import load_dotenv
 
-os.environ["HUGGINGFACEHUB_API_TOKEN"] = "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"
+load_dotenv()
+
+HF_TOKEN = os.getenv("HUGGINGFACEHUB_API_TOKEN")
 
 # Chargement et chunking du PDF
 def process_pdf(pdf_path):
@@ -46,12 +49,13 @@ def load_rag_chain():
     embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     db = FAISS.load_local("faiss_index", embedding, allow_dangerous_deserialization=True)
 
-    repo_id = "mistral/mistral-7B-instruct-v0.3"
+    repo_id = "facebook/opt-iml-1.3b"
 
     llm = HuggingFaceEndpoint(
         repo_id=repo_id,
         temperature=0.1,
-        max_length=512,
+        max_new_tokens=512,               
+        huggingfacehub_api_token=HF_TOKEN,
     )
 
     qa_chain = RetrievalQA.from_chain_type(
