@@ -1,2 +1,2 @@
-.gitignore
-.env
+git rm --cached .env
+git commit -m "Remove .env from tracking"
