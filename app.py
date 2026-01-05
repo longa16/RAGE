@@ -1,7 +1,9 @@
-import os 
+import os
+import traceback 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint   
+from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint, ChatHuggingFace  
+from langchain_core.prompts import PromptTemplate
 from langchain_community.vectorstores import FAISS
 from langchain_classic.chains import RetrievalQA
  
@@ -44,46 +46,60 @@ def create_vector_db(chunks):
     print("Base de données vectorielle créée et sauvegardée localement.")
     return db
 
-def load_rag_chain(): 
+def load_rag_chain():
+    print("--- 3. Chargement du Cerveau (Mistral 7B) ---")
     
-    embedding = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    db = FAISS.load_local("faiss_index", embedding, allow_dangerous_deserialization=True)
-
-    repo_id = "facebook/opt-iml-1.3b"
-
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
+    
+    
+    repo_id = "mistralai/Mistral-7B-Instruct-v0.2"
+    
     llm = HuggingFaceEndpoint(
         repo_id=repo_id,
-        temperature=0.1,
-        max_new_tokens=512,               
+        task="conversational",
         huggingfacehub_api_token=HF_TOKEN,
+        temperature=0.1, 
     )
 
+    chat_llm = ChatHuggingFace(llm=llm)
+    
+    # Template de prompt adapté pour le format chat/instruct
+    prompt_template = """<s>[INST] Utilise le contexte suivant pour répondre à la question. Si tu ne sais pas, dis-le simplement.
+
+Contexte : {context}
+
+Question : {question} [/INST]</s>"""
+
+    PROMPT = PromptTemplate(template=prompt_template, input_variables=["context", "question"])
+    
     qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever= db.as_retriever(search_kwargs={"k": 3}),
+        llm=chat_llm,
+        chain_type="stuff", 
+        retriever=db.as_retriever(search_kwargs={"k": 3}), 
         return_source_documents=True,
+        chain_type_kwargs={"prompt": PROMPT}
     )
-
+    
     return qa_chain
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
+    
     if os.path.exists("faiss_index"):
         chain = load_rag_chain()
-
+        
         question = "Quels sont les points clés de ce document ?"
-        print(f"Question : {question}")
-        print("Génération de la réponse...")
-
+        print(f"\nQuestion : {question}")
+        print("Réflexion en cours...")
+        
         resultat = chain.invoke({"query": question})
-
-        print("Réponse générée :")
+        
+        print("\n--- RÉPONSE DE MISTRAL ---")
         print(resultat['result'])
-
-        print("\n Portions du pdf utilisées :")
+        
+        print("\n--- SOURCES UTILISÉES ---")
         for doc in resultat['source_documents']:
             print(f"- Page {doc.metadata.get('page', '?')}: {doc.page_content[:100]}...")
-
-else:
-    print("Erreur : Lance d'abord la création de la base")
+    else:
+        print("Erreur : Lance d'abord la création de la base (code précédent) ou vérifie le dossier faiss_index.")
