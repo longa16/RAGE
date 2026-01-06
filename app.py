@@ -8,6 +8,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_classic.chains import RetrievalQA
  
 from dotenv import load_dotenv
+import streamlit as st  # Ajout de l'import pour Streamlit
 
 load_dotenv()
 
@@ -83,23 +84,50 @@ Question : {question} [/INST]</s>"""
     
     return qa_chain
 
+# Interface Streamlit
+st.title("RAG QA sur PDF avec Mistral")
 
-if __name__ == "__main__":
+# Upload du PDF
+uploaded_file = st.file_uploader("Téléchargez un fichier PDF", type=["pdf"])
+
+if uploaded_file is not None:
+    # Sauvegarde temporaire du PDF
+    pdf_path = f"./{uploaded_file.name}"
+    with open(pdf_path, "wb") as f:
+        f.write(uploaded_file.getvalue())
     
-    if os.path.exists("faiss_index"):
-        chain = load_rag_chain()
-        
-        question = "Quels sont les points clés de ce document ?"
-        print(f"\nQuestion : {question}")
-        print("Réflexion en cours...")
-        
-        resultat = chain.invoke({"query": question})
-        
-        print("\n--- RÉPONSE DE MISTRAL ---")
-        print(resultat['result'])
-        
-        print("\n--- SOURCES UTILISÉES ---")
-        for doc in resultat['source_documents']:
-            print(f"- Page {doc.metadata.get('page', '?')}: {doc.page_content[:100]}...")
-    else:
-        print("Erreur : Lance d'abord la création de la base (code précédent) ou vérifie le dossier faiss_index.")
+    with st.spinner("Traitement du PDF et création de la base vectorielle..."):
+        chunks = process_pdf(pdf_path)
+        if chunks:
+            create_vector_db(chunks)
+            st.session_state.chain = load_rag_chain()
+            st.success("PDF traité et chaîne RAG chargée avec succès !")
+        else:
+            st.error("Erreur lors du traitement du PDF.")
+
+# Si la chaîne est chargée (dans session_state)
+if "chain" in st.session_state:
+    question = st.text_input("Posez votre question sur le document :")
+    
+    if st.button("Répondre"):
+        if question:
+            with st.spinner("Génération de la réponse en cours..."):
+                try:
+                    result = st.session_state.chain.invoke({"query": question})
+                    st.subheader("Réponse de Mistral :")
+                    st.write(result['result'])
+                    
+                    st.subheader("Sources utilisées :")
+                    for doc in result['source_documents']:
+                        page = doc.metadata.get('page', '?')
+                        content_snippet = doc.page_content[:100] + "..."
+                        st.write(f"- Page {page} : {content_snippet}")
+                except Exception as e:
+                    st.error(f"Erreur lors de la génération : {str(e)}")
+        else:
+            st.warning("Veuillez entrer une question.")
+else:
+    st.info("Téléchargez un PDF pour commencer.")
+
+# Optionnel : Nettoyage du fichier temporaire après usage (mais pas obligatoire pour un app simple)
+# os.remove(pdf_path) if os.path.exists(pdf_path) else None
