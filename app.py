@@ -5,10 +5,9 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpoint, ChatHuggingFace  
 from langchain_core.prompts import PromptTemplate
 from langchain_community.vectorstores import FAISS
-from langchain_classic.chains import RetrievalQA
- 
+from langchain_classic.chains import RetrievalQA 
 from dotenv import load_dotenv
-import streamlit as st  # Ajout de l'import pour Streamlit
+import streamlit as st  
 
 load_dotenv()
 
@@ -85,13 +84,10 @@ Question : {question} [/INST]</s>"""
     return qa_chain
 
 # Interface Streamlit
-st.title("RAG QA sur PDF avec Mistral")
-
-# Upload du PDF
+st.title("Mini Demo RAG sur PDF avec Mistral")
 uploaded_file = st.file_uploader("Téléchargez un fichier PDF", type=["pdf"])
 
 if uploaded_file is not None:
-    # Sauvegarde temporaire du PDF
     pdf_path = f"./{uploaded_file.name}"
     with open(pdf_path, "wb") as f:
         f.write(uploaded_file.getvalue())
@@ -105,7 +101,7 @@ if uploaded_file is not None:
         else:
             st.error("Erreur lors du traitement du PDF.")
 
-# Si la chaîne est chargée (dans session_state)
+# Si la chaîne est chargée 
 if "chain" in st.session_state:
     question = st.text_input("Posez votre question sur le document :")
     
@@ -128,6 +124,3 @@ if "chain" in st.session_state:
             st.warning("Veuillez entrer une question.")
 else:
     st.info("Téléchargez un PDF pour commencer.")
-
-# Optionnel : Nettoyage du fichier temporaire après usage (mais pas obligatoire pour un app simple)
-# os.remove(pdf_path) if os.path.exists(pdf_path) else None
